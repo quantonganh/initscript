@@ -1,0 +1,115 @@
+#!/usr/local/bash4/bin/bash
+#
+# redis - this script starts and stops the redis-server daemon
+#
+# chkconfig: - 85 15
+# description: Redis is a persistent key-value database
+# processname: redis-server
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+# Check that networking is up.
+[ "$NETWORKING" = "no" ] && exit 0
+
+typeset -A SUBSYS
+
+PORTS="1291 1292 1293 35535 25522"
+SUBSYS=([1291]="redis-1291" [1292]="redis-1292" [1293]="redis-1293" [35535]="redis-35535" [25522]="redis-ip2location") 
+
+basedir="/usr/local/redis"
+redis="redis-server"
+prog=$redis
+lockdir="$basedir/var/lock/subsys"
+
+[ -f /etc/sysconfig/redis ] && . /etc/sysconfig/redis
+
+function stop_redis()
+{
+	port=$1
+	REDISPID=`ps -ef | grep ${SUBSYS[$port]} | grep -v grep | awk '{ print $2 }'`
+        if [ -n "$REDISPID" ]; then
+		/bin/kill "$REDISPID" >/dev/null 2>&1
+		retval=$?
+		if [ $retval -eq 0 ]; then
+			STOPTIMEOUT=60
+			while [ $STOPTIMEOUT -gt 0 ]; do
+				/bin/kill -0 "$REDISPID" >/dev/null 2>&1 || break
+				sleep 1
+				let STOPTIMEOUT=${STOPTIMEOUT}-1
+			done
+            if [ $STOPTIMEOUT -eq 0 ]; then
+                echo "Timeout error occurred trying to stop Redis Daemon on port $port."
+                retval=1
+                action $"Stopping $prog on port: $port" /bin/false
+            else
+                rm -f $lockdir/${SUBSYS[$port]}
+				rm -f $basedir/var/run/${SUBSYS[$port]}.pid
+                action $"Stopping $prog on port: $port" /bin/true
+            fi
+        else
+            action $"Stopping $prog on port: $port" /bin/false
+        fi
+    else
+		echo "Redis daemon is not running on port: $port"
+        retval=1
+        action $"Stopping $prog on port: $port" /bin/false
+    fi
+}
+
+case "$1" in
+start)
+	if [ -n "$2" ]; then
+		port="$2"
+		if [ -f "$basedir/var/run/${SUBSYS[$port]}.pid" ]; then
+			echo "Redis on port $port is already running."
+			action $"Starting $prog on port: $port. " /bin/false
+		else
+			echo -n $"Starting $prog on port: $port"
+    		daemon --user=redis $basedir/bin/$redis $basedir/etc/${SUBSYS[$port]}.conf
+    		retval=$?
+    		echo 
+    		[ $retval -eq 0 ] && touch $lockdir/${SUBSYS[$port]}
+		fi
+	else
+		for port in $PORTS; do
+	    	[ -x "$basedir/bin/$redis" ] || exit 5
+	    	[ -f "$basedir/etc/${SUBSYS[$port]}.conf" ] || exit 6
+			if [ -f "$basedir/var/run/${SUBSYS[$port]}.pid" ]; then
+				echo "Redis on port $port is already running."
+				action $"Starting $prog on port: $port. " /bin/false
+			else
+	    		echo -n $"Starting $prog on port: $port"
+	    		daemon --user=redis $basedir/bin/$redis $basedir/etc/${SUBSYS[$port]}.conf
+	    		retval=$?
+	    		echo
+	    		[ $retval -eq 0 ] && touch $lockdir/${SUBSYS[$port]}
+			fi
+   			#return $retval
+		done
+	fi
+	;;
+
+stop) 
+	if [ -n "$2" ]; then
+		port="$2"
+		stop_redis $port;
+        #return $retval
+		#echo
+	else
+		for port in $PORTS; do
+			stop_redis $port;
+		done
+		retval=$?
+		echo
+	fi
+	;;
+
+*)
+    echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload}"
+    exit 2
+	;;
+esac
