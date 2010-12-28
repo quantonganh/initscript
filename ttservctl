@@ -1,0 +1,171 @@
+#! /usr/local/bash4/bin/bash
+
+#----------------------------------------------------------------
+# Startup script for the server of Tokyo Tyrant
+#----------------------------------------------------------------
+# chkconfig: - 81 16
+# description: Tokyo Tyrant
+# processname: ttserver
+
+typeset -A PIDS
+typeset -A LOGS
+typeset -A DBNAMES
+
+# configuration variables
+prog="ttservctl"
+cmd="ttserver"
+HOST="192.168.3.82"
+MASTER_HOST="192.168.7.106"
+THREADS="8"
+basedir="/usr/local/bin/tokyotyrant/detail"
+
+PORTS="1979 1980 1983 1985 2001 2002 19807 19810 19811"
+
+PIDS=([1979]="video/movie/pid" [1980]="video/vietnam/pid" [1983]="commond/pid" [1985]="video/top/pid" [2001]="mp3/audio/pid" [2002]="mp3/lyric/pid" [19807]="video/youtube/pid" [19810]="video/international/pid" [19811]="diemthi/pid")
+
+LOGS=([1979]="video/movie/movie.log" [1980]="video/vietnam/vietnam.log" [1983]="commond/commond.log" [1985]="video/top/top.log" [2001]="mp3/audio/audio.log" [2002]="mp3/lyric/lyric.log" [19807]="video/youtube/youtube.log" [19810]="video/international/international.log" [19811]="diemthi/diemthi.log")
+
+DBNAMES=([1979]="video/movie/movie.tch#bnum=2000000#opts=ld" [1980]="video/vietnam/vietnam.tch#bnum=2000000#opts=ld" [1983]="commond/commond.tch#bnum=5000000#opts=ld" [1985]="video/top/top.tch#bnum=2000000#opts=ld" [2001]="mp3/audio/audio.tch#bnum=2000000#opts=ld" [2002]="mp3/lyric/lyric.tch#bnum=2000000#opts=ld" [19807]="video/youtube/youtube.tch#bnum=20000000#opts=ld" [19810]="video/international/international.tch#bnum=2000000#opts=ld" [19811]="diemthi/diemthi.tch#bnum=2000000#opts=ld")
+
+retval=0
+
+# setting environment variables
+LANG=C
+LC_ALL=C
+PATH="$PATH:/sbin:/usr/sbin:/usr/local/sbin"
+export LANG LC_ALL PATH
+
+# send HUP to the server for log rotation
+hup(){
+  printf 'Sending HUP signal to the server of Tokyo Tyrant\n'
+  if [ -f "$pidfile" ] ; then
+    pid=`cat "$pidfile"`
+    printf "Sending the hangup signal to the process: %s\n" "$pid"
+    kill -HUP "$pid"
+    printf 'Done\n'
+  else
+    printf 'No process found\n'
+    retval=1
+  fi
+}
+
+
+# check permission
+if [ -d "$basedir" ] && ! touch "$basedir/$$" >/dev/null 2>&1
+then
+  printf 'Permission denied\n'
+  exit 1
+fi
+rm -f "$basedir/$$"
+
+
+# dispatch the command
+case "$1" in
+start)
+	if [ -n "$2" ]; then
+		echo -n "Starting the server of Tokyo Tyrant on port $2: "
+		port="$2"
+		dirname=`dirname "$basedir/${PIDS[$port]}"`
+		if [ ! -d "$dirname/ulog-3" ]; then
+			mkdir "$dirname/ulog-3"
+			chown tokyo:tokyo "$dirname/ulog-3"
+		fi
+		$cmd -host $HOST -port $port -thnum $THREADS -dmn -pid "$basedir/${PIDS[$port]}" -ulog "$dirname/ulog-3" -sid 3 -mhost $MASTER_HOST -mport $port -rts "$dirname/3.rts" -log "$basedir/${LOGS[$port]}" -le "$basedir/${DBNAMES[$port]}"
+		if [ "$?" -eq 0 ] ; then
+			echo -e '\t[ OK ]'
+		else
+		  	printf 'The server could not started on port '$port'\n'
+		  	retval=1
+		fi
+	else
+		for port in $PORTS; do
+			dirname=`dirname "$basedir/${PIDS[$port]}"`
+			cd $dirname
+			if [ ! -f "3.rts" ]; then
+				echo backup_$port.tch.* | awk -F . '{print $NF}' > 3.rts
+				chown tokyo:tokyo 3.rts
+			fi
+			if [ ! -d "$dirname/ulog-3" ]; then
+				mkdir "$dirname/ulog-3"
+				chown tokyo:tokyo "$dirname/ulog-3"
+			fi
+			echo -n "Starting the server of Tokyo Tyrant on port $port: "
+	    	$cmd -host $HOST -port $port -thnum $THREADS -dmn -pid "$basedir/${PIDS[$port]}" -ulog "$dirname/ulog-3" -sid 3 -mhost $MASTER_HOST -mport $port -rts "$dirname/3.rts" -log "$basedir/${LOGS[$port]}" -le "$basedir/${DBNAMES[$port]}"
+			if [ "$?" -eq 0 ] ; then
+				echo -e '\t[ OK ]'
+			else
+			  	printf 'The server could not started on port '$port'\n'
+			  	retval=1
+			fi
+		done
+	fi
+  	;;
+stop)
+	if [ -n "${2}" ]; then
+		port="$2"
+		echo -n "Stopping the server of Tokyo Tyrant on port $port: "
+		if [ -f "$basedir/${PIDS[$port]}" ]; then
+			kill -TERM `cat $basedir/${PIDS[$port]}`
+			c=0
+			while true ; do
+			  sleep 0.1
+			  if [ -f "$basedir/${PIDS[$port]}" ] ; then
+			    c=`expr $c + 1`
+			    if [ "$c" -ge 100 ] ; then
+			      printf 'Hanging process: %d\n' "$pid"
+			      retval=1
+			      break
+			    fi
+			  else
+			    echo -e '\t[ OK ]'
+			    break
+			  fi
+			done
+		else
+			printf 'No process found\n'
+			retval=1
+		fi
+	else
+		for port in $PORTS; do
+			if [ -f "$basedir/${PIDS[$port]}" ] ; then
+			  	pid=`cat "$basedir/${PIDS[$port]}"`
+			  	echo -n "Stopping the server of Tokyo Tyrant on port $port: "
+			  	kill -TERM "$pid"
+			  	c=0
+			  	while true ; do
+			    	sleep 0.1
+			    	if [ -f "$basedir/${PIDS[$port]}" ] ; then
+			      		c=`expr $c + 1`
+			      		if [ "$c" -ge 100 ] ; then
+			        		printf 'Hanging process: %d\n' "$pid"
+			        		retval=1
+			        		break
+			      		fi
+			    	else
+			      		echo -e '\t[ OK ]'
+			      		break
+			    	fi
+			  	done
+			else
+		  		printf 'No process found\n'
+		  		retval=1
+			fi
+		done
+	fi
+  	;;
+hup)
+  	hup
+  	;;
+*)
+  	printf 'Usage: %s {start|stop|hup} <port>\n' "$prog"
+  	exit 1
+  	;;
+esac
+
+
+# exit
+exit "$retval"
+
+
+
+# END OF FILE
