@@ -1,0 +1,57 @@
+#! /bin/sh
+#
+# webqueue         Adtech Webserver
+#
+# chkconfig:    35 84 16
+# description:  webqueue is a webserver to handle adv banners. 
+# processname:  webqueue
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+base="/home/longdt/workspace/_webqueue"
+webqueue="webqueue"
+prog="webqueue"
+
+[ -f $base/$webqueue ] || exit 0
+
+RETVAL=0
+
+# See how we were called.
+case "$1" in
+  start)
+        echo -n "Starting $prog: "
+		cd $base
+        daemon ./$webqueue
+        RETVAL=$?
+        echo
+        [ $RETVAL = 0 ] && touch /var/lock/subsys/$prog
+        ;;
+  stop)
+        echo -n "Stopping $prog: "
+        killproc $prog
+        RETVAL=$?
+        echo
+        [ $RETVAL = 0 ] && rm -f /var/lock/subsys/$prog
+        ;;
+  restart)
+  	$0 stop
+	$0 start
+	RETVAL=$?
+	;;
+  condrestart)
+       [ -e /var/lock/subsys/$prog ] && $0 restart
+       ;;
+  status)
+        status $prog
+	RETVAL=$?
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart|condrestart|status}"
+	exit 1
+esac
+
+exit $RETVAL
