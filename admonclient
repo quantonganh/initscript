@@ -1,0 +1,94 @@
+#!/bin/sh
+#
+# admonclient	Start/Stop the remotecmd java service
+#
+# chkconfig: 	35 81 19
+# description:	admonclient java service
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+appDir="/usr/local/ads/admonclient"
+serviceUser="java"
+serviceName="admonclient"
+serviceLogFile="/var/log/$serviceName.log"
+javaCommand="java"
+javaExe="$JAVA_HOME/bin/$javaCommand"
+javaArgs="-jar ./monclient.jar ./admonclient.xml"
+javaCommandLine="$javaExe $javaArgs &"
+lockFile="/var/lock/subsys/$serviceName"
+
+# Returns 0 if the process with PID $1 is running.
+function checkProcessIsRunning {
+   local pid="$1"
+   if [ -z "$pid" -o "$pid" == " " ]; then return 1; fi
+   if [ ! -e /proc/$pid ]; then return 1; fi
+   return 0; 
+}
+
+start() {
+	echo -n "Starting $serviceName service..."
+	cd $appDir || return 1
+	[ -f $serviceLogFile ] || touch $serviceLogFile
+	chown $serviceUser:$serviceUser $serviceLogFile
+	cmd="$javaCommandLine >>$serviceLogFile 2>&1"
+	if [ `ps -ef | grep $serviceName | grep -c -v grep` -eq 1 ]; then
+        echo -ne '\t\t\t\t\t[\033[31mFAILED\033[0m]\n'
+		echo "The $serviceName is already started."
+		exit 1
+	else
+		su -m $serviceUser -s $SHELL -c "$cmd" || return 1
+		sleep 0.1
+        echo -ne '\t\t\t\t\t[  \033[32mOK\033[0m  ]\n'
+		return 0	
+	fi
+}
+
+stop() {
+	echo -n "Stopping $serviceName service..."
+	if [ `ps -ef | grep $serviceName | grep -c -v grep` -eq 0 ]; then
+        echo -ne '\t\t\t\t\t[\033[31mFAILED\033[0m]\n'
+        echo "There is no such process $serviceName running."
+        exit 1
+	else
+		pid=`ps -ef | grep $serviceName | grep -v grep | awk '{ print $2 }'`
+		kill $pid || return 1
+		c=0
+    	while true ; do
+		    sleep 0.1
+	        if [ -f "$pidfile" ] ; then
+	    	    c=`expr $c + 1`
+	        	if [ "$c" -ge 60 ] ; then
+	                printf 'Hanging process: %d\n' "$pid"
+	                retval=1
+	                break
+	            fi
+	        else
+	            echo -ne '\t\t\t\t\t[  \033[32mOK\033[0m  ]\n'
+	            break
+	        fi
+	    done
+	fi
+}
+
+restart() {
+	stop
+	start
+}
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart)
+		restart
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|restart}"
+		RETVAL=1
+esac
+
+exit $RETVAL
