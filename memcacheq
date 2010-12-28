@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# memcacheq    This shell script takes care of starting and stopping
+#              standalone memcacheq.
+#
+# chkconfig: - 80 12
+# processname: memcacheq
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/local/bin/memcacheq
+NAME=memcacheq
+DESC=memcacheq
+PIDFILE=/var/run/$NAME.pid
+HOME=/usr/local/bin/mq
+BUFFER_SIZE=2048
+MEM_TRICKLE=300
+LISTEN=192.168.7.106
+PORT=22211
+USERNAME=memcacheq
+THREADS=8
+CACHE_SIZE=512
+PID=/usr/local/bin/mq/mq.pid
+
+[ -x $DAEMON ] || exit 0
+RETVAL=0
+
+start() {
+	echo -n $"Starting $DESC: "
+ 	$DAEMON -d -r -H $HOME -N -L $BUFFER_SIZE -T $MEM_TRICKLE -l $LISTEN -p $PORT -u $USERNAME -t $THREADS -m $CACHE_SIZE -P $PID
+ 	RETVAL=$?
+ 	[ $RETVAL -eq 0 ] && touch $PIDFILE
+ 	echo
+ 	return $RETVAL
+}
+stop() {
+ 	echo -n $"Shutting down $DESC: "
+ 	killproc $NAME
+ 	RETVAL=$?
+	echo
+ 	[ $RETVAL -eq 0 ] && rm -f $PIDFILE
+ 	return $RETVAL
+}
+# See how we were called.
+case "$1" in
+ 	start)
+  		start
+  		;;
+ 	stop)
+  		stop
+  		;;
+ 	restart|reload)
+  		stop
+  		start
+  		RETVAL=$?
+  		;;
+ 	status)
+  		status $prog
+  		RETVAL=$?
+  		;;
+ 	*)
+  		echo $"Usage: $0 {start|stop|restart|status}"
+  		exit 1
+esac
+exit $RETVAL
