@@ -1,0 +1,95 @@
+#! /usr/local/bash4/bin/bash
+#
+# chkconfig: - 55 45
+# description:	The memcached daemon is a network memory cache service.
+# processname: memcached
+# config: /etc/sysconfig/memcached
+
+# Standard LSB functions
+#. /lib/lsb/init-functions
+
+# Source function library.
+. /etc/init.d/functions
+
+if [ -f /etc/sysconfig/memcached ];then 
+	. /etc/sysconfig/memcached
+fi
+
+# Check that networking is up.
+. /etc/sysconfig/network
+
+if [ "$NETWORKING" = "no" ]
+then
+	exit 0
+fi
+
+typeset -A PIDS
+typeset -A MEMORYS
+typeset -A FACTORS
+typeset -A INSTANCES
+
+PORTS="11210 11211 11212 11213 11214 11215 11216 11217"
+USER=memcached
+basedir="/usr/local/memcached"
+MAXCONN=1024
+OPTIONS=""
+INSTANCES=([11210]="test" [11211]="mp3" [11212]="memcached" [11213]="muagioi" [11214]="sohamuzik" [11215]="sohaphim" [11216]="sohaphimdetails" [11217]="sohamuzik-top")
+#PIDS=([11210]="$basedir/var/run/test.pid" [11211]="$basedir/var/run/mp3.pid" [11212]="$basedir/var/run/memcached.pid" [11213]="$basedir/var/run/muagioi.pid" [11214]="$basedir/var/run/sohamuzik.pid" [11215]="$basedir/var/run/sohaphim.pid" [11216]="$basedir/var/run/sohaphimdetails.pid" [11217]="$basedir/var/run/sohamuzik-top.pid")
+MEMORYS=([11210]="512" [11211]="512" [11212]="512" [11213]="512" [11214]="1024" [11215]="512" [11216]="512" [11217]="2048")
+FACTORS=([11210]="1.25" [11211]="1.25" [11212]="1.25" [11213]="1.25" [11214]="1.05" [11215]="1.25" [11216]="1.25" [11217]="1.25")
+
+RETVAL=0
+prog="memcached"
+cmd="/usr/local/memcached/bin/memcached"
+user="memcached"
+ip="192.168.6.29"
+peer="192.168.6.32"
+max_conn=2048
+max_memory=512
+threads=8
+
+case "$1" in
+	start) 
+		if [ -n "$2" ]; then
+			port="$2"
+			if [ `ps -ef | grep "$cmd" | grep -c $port` -ge 1 ]; then
+				action $"Starting the memcached server on port '$2'... " /bin/false
+			else
+				if [ ! -f $basedir/var/log/${INSTANCES[$port]}.log ]; then 
+					touch $basedir/var/log/${INSTANCES[$port]}.log 
+					/bin/chown memcached:memcached $basedir/var/log/${INSTANCES[$port]}.log
+				fi
+				$cmd -d -u $user -l $ip -c $max_conn -t $threads -m ${MEMORYS[$port]} -p $port -P $basedir/var/run/${INSTANCES[$port]}.pid -f ${FACTORS[$port]} -x $peer -X `expr $port '*' 10` -vv > $basedir/var/log/${INSTANCES[$port]}.log 2>&1
+				action $"Starting the memcached server on port '$2'... " /bin/true
+			fi
+		else
+			for port in $PORTS; do
+				echo "Port $port: "
+				if [ ! -f $basedir/var/log/${INSTANCES[$port]}.log ]; then 
+					touch $basedir/var/log/${INSTANCES[$port]}.log 
+					/bin/chown memcached:memcached $basedir/var/log/${INSTANCES[$port]}.log
+				fi
+				$cmd -d -u $user -l $ip -c $max_conn -t $threads -m ${MEMORYS[$port]} -p $port -P $basedir/var/run/${INSTANCES[$port]}.pid -f ${FACTORS[$port]} -x $peer -X `expr $port '*' 10` -vv > $basedir/var/log/${INSTANCES[$port]}.log 2>&1
+				action $"Starting the memcached server on port '$2'... " /bin/true
+			done
+		fi
+		;;
+	stop)	
+		if [ -n "$2" ]; then
+			port="$2"
+			if [ `ps -ef | grep "$cmd" | grep -c $port` -eq 0 ]; then
+				action $"Stopping the memcached server on port '$port'... " /bin/false
+			else
+				kill -TERM `ps -ef | grep "$cmd" | grep $port | grep -v grep | awk '{ print $2 }'`
+				action $"Stopping the memcached server on port '$port'... " /bin/true 
+			fi
+		else
+			killproc $prog
+		fi
+		;;
+	*)
+		printf 'Usage: %s {start|stop} <port>\n' "$prog"
+		exit 1
+		;;
+esac
+
