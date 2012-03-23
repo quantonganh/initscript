@@ -1,3 +1,4 @@
+```bash
 #!/usr/local/bash4/bin/bash
 #
 # redis - this script starts and stops the redis-server daemon
@@ -123,3 +124,4 @@ restart)
     exit 2
 	;;
 esac
+```
